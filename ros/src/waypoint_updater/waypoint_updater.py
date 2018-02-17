@@ -5,6 +5,8 @@ from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
 
 import math
+import sys
+from itertools import islice, cycle
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -38,15 +40,55 @@ class WaypointUpdater(object):
 
         # TODO: Add other member variables you need below
 
+        # Current pose
+        self.pose = None
+
+        # Base waypoints
+        self.waypoints = None
+
         rospy.spin()
 
     def pose_cb(self, msg):
         # TODO: Implement
-        pass
+        self.pose = msg.pose
+        # rospy.loginfo("waypoint_updater:pose_cb:self.pose %s", self.pose)
 
-    def waypoints_cb(self, waypoints):
-        # TODO: Implement
-        pass
+        if self.waypoints == None:
+            return
+
+        dist_min = sys.maxsize;
+        wp_min = None
+
+        x_ego = self.pose.position.x;
+        y_ego = self.pose.position.y;
+
+        for i in range(len(self.waypoints)):
+            waypoint = self.waypoints[i]
+
+            x_wp = waypoint.pose.pose.position.x;
+            y_wp = waypoint.pose.pose.position.y;
+
+            dist = math.sqrt((x_ego-x_wp)**2 + (y_ego-y_wp)**2)
+
+            if dist < dist_min:
+                dist_min = dist
+                wp_min = i
+
+        next_wps = list(islice(cycle(self.waypoints), wp_min, wp_min + LOOKAHEAD_WPS - 1))
+
+        lane = Lane()
+        lane.waypoints = next_wps
+        lane.header.frame_id = '/world'
+        lane.header.stamp = rospy.Time(0)
+
+        self.final_waypoints_pub.publish(lane)
+
+    def waypoints_cb(self, msg):
+        if self.waypoints == None:
+            self.waypoints = msg.waypoints;
+
+        for i in range(len(self.waypoints)):
+            self.set_waypoint_velocity(self.waypoints, i, 10)
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
