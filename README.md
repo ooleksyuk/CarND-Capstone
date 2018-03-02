@@ -2,6 +2,15 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 
 Please use **one** of the two installation options, either native **or** docker installation.
 
+### Team:
+#### `Bos Robo Car`
+
+* Olga Oleksyuk mail(at)olga-v.com
+* Isharaka Gunasinghe isharaka(at)yahoo.com
+* Shay Fadida shayfad(at)post.bgu.ac.il
+* Ioannis Tornazakis itornaza(at)gmail.com
+* Jaeil Park parkjaeil0108(at)gmail.com
+
 ### Native Installation
 
 * Be sure that your workstation is running Ubuntu 16.04 Xenial Xerus or Ubuntu 14.04 Trusty Tahir. [Ubuntu downloads can be found here](https://www.ubuntu.com/download/desktop).
