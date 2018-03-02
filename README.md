@@ -2,14 +2,13 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 
 Please use **one** of the two installation options, either native **or** docker installation.
 
-### Team:
-#### `Bos Robo Car`
+### Team: **Bos Robo Car**
 
-* Olga Oleksyuk mail(at)olga-v.com
-* Isharaka Gunasinghe isharaka(at)yahoo.com
-* Shay Fadida shayfad(at)post.bgu.ac.il
-* Ioannis Tornazakis itornaza(at)gmail.com
-* Jaeil Park parkjaeil0108(at)gmail.com
+* **Olga Oleksyuk** _mail(at)olga-v.com_
+* **Isharaka Gunasinghe** _isharaka(at)yahoo.com_
+* **Shay Fadida** _shayfad(at)post.bgu.ac.il_
+* **Ioannis Tornazakis** _itornaza(at)gmail.com_
+* **Jaeil Park** _parkjaeil0108(at)gmail.com_
 
 ### Native Installation
 
