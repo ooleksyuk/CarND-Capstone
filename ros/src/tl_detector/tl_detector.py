@@ -140,6 +140,8 @@ class TLDetector(object):
 
         #TODO find the closest visible traffic light (if one exists)
 
+        #TODO: Create a dummy classifier to test the code and use until the real classifier is completed
+
         if light:
             state = self.get_light_state(light)
             return light_wp, state
