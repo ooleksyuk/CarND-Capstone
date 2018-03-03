@@ -51,7 +51,7 @@ void PurePursuit::callbackFromWayPoints(const styx_msgs::LaneConstPtr &msg)
 {
   current_waypoints_.setPath(*msg);
   waypoint_set_ = true;
-  // ROS_INFO_STREAM("waypoint subscribed");
+  ROS_INFO_STREAM("waypoint subscribed");
 }
 
 double PurePursuit::getCmdVelocity(int waypoint) const
@@ -63,7 +63,7 @@ double PurePursuit::getCmdVelocity(int waypoint) const
   }
 
   double velocity = current_waypoints_.getWaypointVelocityMPS(waypoint);
-  // ROS_INFO_STREAM("waypoint : " << mps2kmph(velocity) << " km/h ( " << velocity << "m/s )");
+  ROS_INFO_STREAM("waypoint : " << mps2kmph(velocity) << " km/h ( " << velocity << "m/s )");
   return velocity;
 }
 
