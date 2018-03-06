@@ -66,8 +66,10 @@ class DummyDetector(object):
     def pose_cb(self, msg):
         self.pose = msg
 
-    def waypoints_cb(self, waypoints):
-        self.waypoints = waypoints
+    def waypoints_cb(self, msg):
+        # Get them only once
+        if self.waypoints is None:
+            self.waypoints = [wp.pose.pose.position for wp in msg.waypoints]
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
@@ -75,7 +77,7 @@ class DummyDetector(object):
         # TODO: Consider moving all the process_traffic_lights here, else:
     
         # TODO: Call process_traffic_lights, like so:
-        # light_wp, state = self.process_traffic_lights()
+        light_wp, state = self.process_traffic_lights()
         
         # TODO: publish the result of the function call
         # Implement the loop logic to publish until rospy.is_shutdown()
@@ -129,6 +131,8 @@ class DummyDetector(object):
         min_dist = float('inf')
         closest_waypoint_index = 0  # Index to return
 
+        # TODO: Check if the self.waypoints is null before processing
+
         for i, wp in enumerate(self.waypoints):
             # d^2 = (x1 - x2)^2 + (y1 - y2)^2
             dist = pow(pose.x - wp.x, 2) + pow(pose.y - wp.y, 2)
@@ -175,7 +179,8 @@ class DummyDetector(object):
         # a given intersection
         stop_line_positions = self.config['stop_line_positions']
         if(self.pose):
-            car_position = self.get_closest_waypoint(self.pose.pose)
+            rospy.loginfo("self.pose.pose.position %s", self.pose.pose.position)
+            car_position = self.get_closest_waypoint(self.pose.pose.position)
     
         # TODO: Associate the stop lines with the traffic lights
         # (just do this once, the first time we get the method to execute)
