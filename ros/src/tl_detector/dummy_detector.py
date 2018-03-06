@@ -39,6 +39,8 @@ class DummyDetector(object):
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray,
                                 self.traffic_cb)
+                                
+        # TODO: Remove camera subscription
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
         config_string = rospy.get_param("/traffic_light_config")
@@ -69,10 +71,14 @@ class DummyDetector(object):
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
+    
+        # TODO: Consider moving all the process_traffic_lights here, else:
+    
         # TODO: Call process_traffic_lights, like so:
         # light_wp, state = self.process_traffic_lights()
         
-        # TODO: If the state is red, publish the traffic waypoint
+        # TODO: publish the result of the function call
+        # Implement the loop logic to publish until rospy.is_shutdown()
 
     def image_cb(self, msg):
         """
@@ -170,13 +176,26 @@ class DummyDetector(object):
         stop_line_positions = self.config['stop_line_positions']
         if(self.pose):
             car_position = self.get_closest_waypoint(self.pose.pose)
-
+    
+        # TODO: Associate the stop lines with the traffic lights
+        # (just do this once, the first time we get the method to execute)
+    
+        #-------------------------------------------------------------
         # TODO: Find the closest visible traffic light (if one exists)
-        # Set a big minimum distance to begin
-        # For all the traffic lights:
-            # Calculate the distance from the car's position
-            # Update the minimum distance and traffic light index
+        #-------------------------------------------------------------
+        # Step 1. Get the car location
         
+        # Step 2. Locate the next upcoming traffic light
+            # Set a big minimum distance to begin
+            # For all the traffic lights:
+                # Calculate the distance from the car's position
+                # Check if the status of the traffic light is red
+                # Update the minimum distance and traffic light index
+        
+        # TODO: Correlate the discovered traffic light with the stop line to
+        # return to the callback
+        
+        # Return result to callback
         if light:
             state = self.get_light_state(light)
             return light_wp, state
