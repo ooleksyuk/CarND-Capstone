@@ -14,31 +14,38 @@ import yaml
 STATE_COUNT_THRESHOLD = 3
 
 class DummyDetector(object):
+    """
+    Detecting the status of the traffic lights based on simulator information
+    
+    Caution!!!
+    - For development and testing purposes only, this does not work on Carla!
+    - For Carla use the live detector found in the live_detector.py
+    
+    Notes:
+    /vehicle/traffic_lights provides you with the location of the traffic
+    light in 3D map space and helps you acquire an accurate ground truth
+    data source for the traffic light classifier by sending the current
+    color state of all traffic lights in the simulator. When testing on the
+    vehicle, the color state will not be available. You'll need to rely on
+    the position of the light and the camera image to predict it.
+    """
     
     #---------------------------------------------------------------------------
     # Constructor
     #---------------------------------------------------------------------------
+    
     def __init__(self):
         rospy.init_node('tl_detector')
 
         self.pose = None
         self.waypoints = None
         self.stop_line_positions = None
-        self.light_stops = {}   # Correlation between lights and stop positions
-        self.correlated = False
+        self.light_stops = {} # Correlation between lights and stop positions
+        self.correlated = False # Controls the correlation process
         self.lights = []
-
+        
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
-
-        '''
-        /vehicle/traffic_lights provides you with the location of the traffic
-        light in 3D map space and helps you acquire an accurate ground truth
-        data source for the traffic light classifier by sending the current
-        color state of all traffic lights in the simulator. When testing on the
-        vehicle, the color state will not be available. You'll need to rely on
-        the position of the light and the camera image to predict it.
-        '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray,
                                 self.traffic_cb)
 
@@ -62,6 +69,7 @@ class DummyDetector(object):
     #---------------------------------------------------------------------------
     # Callbacks
     #---------------------------------------------------------------------------
+    
     def pose_cb(self, msg):
         self.pose = msg
 
@@ -74,67 +82,87 @@ class DummyDetector(object):
         self.lights = msg.lights
     
         if self.waypoints == None:
+            # Need the waypoints for further processing
             return
     
-        # List of positions that correspond to the line to stop in front of for
-        # a given intersection
+        # List of positions of the lines to stop in front of intersections
         self.stop_line_positions = self.config['stop_line_positions']
     
-        # Associate the stop lines with the traffic lights
-        # (just do this once, the first time we get the method to execute)
+        # Associate the stop lines with the traffic lights. This is done once
         if self.correlated == False:
             self.correlate_lights_and_stop_positions()
             self.correlated = True
-    
+
         # Get the closest waypoint to the position of the car
         if self.pose:
-            car_wp_index = self.get_closest_waypoint(self.pose.pose.position.x, self.pose.pose.position.y)
-            rospy.loginfo("car is at waypoint: %s", car_wp_index)
+            car_wp_index = self.get_closest_waypoint(self.pose.pose.position.x,
+                                                     self.pose.pose.position.y)
+            rospy.loginfo("car @ %s", car_wp_index)
         else:
+            # Cannot continue without knowing the pose of the car itself
             return
 
-        # TODO: Locate the next upcoming red traffic light stop line
-        closest_stop_index = 0
+        # Locate the next upcoming red traffic light stop line waypoint index
+        closest_stop_index = len(self.waypoints) - 1
         for light in self.lights:
-            if light.state == TrafficLight.GREEN:
-                continue
-            
-            # FIX: Get the waypoint index closest to the light
-            stop_wp_index = self.get_closest_waypoint(self.light_stops[light][0], self.light_stops[light][1])
-  
-            if  stop_wp_index > car_wp_index and \
-                stop_wp_index < closest_stop_index:
-                closest_light_index = stop_wp_index
+            # Green light is not an obstacle!
+            if light.state == TrafficLight.RED:
+                
+                # Get the stop line from the light
+                light_x = light.pose.pose.position.x
+                light_y = light.pose.pose.position.y
+                stop_line = self.light_stops[(light_x, light_y)]
+                rospy.loginfo("found red @ %s",
+                              self.get_closest_waypoint(light_x, light_y))
 
-        rospy.loginfo("closest red/yellow light is at waypoint: %s",
-                      closest_light_index)
+                # Get the waypoint index closest to the stop line
+                stop_line_x = stop_line[0]
+                stop_line_y = stop_line[1]
+                stop_wp_index = self.get_closest_waypoint(stop_line_x,
+                                                          stop_line_y)
+      
+                if  stop_wp_index > car_wp_index and \
+                    stop_wp_index < closest_stop_index:
+                    closest_stop_index = stop_wp_index
 
-        # TODO: Correlate the discovered traffic light with the stop line to
+        rospy.loginfo("closest stop @ %s", closest_stop_index)
         
-        # TODO: publish the result of the function call
-        # Implement the loop logic to publish until rospy.is_shutdown()
+        # Publish the result
+        self.upcoming_red_light_pub.publish(closest_stop_index)
 
     #---------------------------------------------------------------------------
     # Methods
     #---------------------------------------------------------------------------
+
     def correlate_lights_and_stop_positions(self):
-        
-        rospy.loginfo("correlate_lights_and_stop_positions")
-        
+        """
+        Assign the closest stop line position to each of the traffic lights.
+        The operation is supposed to be done only once
+        """
         for light in self.lights:
+            # Reset the minimum distance and the index we search for
             min_dist = float('inf')
             matching_index = 0
+            
             for i, stop_line_position in enumerate(self.stop_line_positions):
+                # Calculate the Euclidean distance
                 dx = light.pose.pose.position.x - stop_line_position[0]
                 dy = light.pose.pose.position.y - stop_line_position[1]
                 dist = pow(dx, 2) + pow(dy, 2)
+                
+                # Update the minimum distance and matching index
                 if dist < min_dist:
                     min_dist = dist
                     matching_index = i
-            self.light_stops[light] = self.stop_line_positions[matching_index]
+        
+            # Correlate each light position (x, y) with the closest stop line
+            x = light.pose.pose.position.x
+            y = light.pose.pose.position.y
+            self.light_stops[(x, y)] = self.stop_line_positions[matching_index]
 
-        for light in self.lights:
-            rospy.loginfo("%s - %s", light, self.light_stops[light] )
+            rospy.loginfo("light = (%s, %s) : stop = (%s, %s)",
+                          x, y, self.stop_line_positions[matching_index][0],
+                          self.stop_line_positions[matching_index][1])
 
     def get_closest_waypoint(self, x, y):
         """
@@ -142,7 +170,8 @@ class DummyDetector(object):
         https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
         
         Args:
-            x, y
+            float x
+            float y
 
         Returns:
             int: index of the closest waypoint in self.waypoints
@@ -150,12 +179,10 @@ class DummyDetector(object):
         min_dist = float('inf')
         closest_waypoint_index = 0  # Index to return
 
-        # TODO: Check if the self.waypoints is null before processing
-
         for i, wp in enumerate(self.waypoints):
             # d^2 = (x1 - x2)^2 + (y1 - y2)^2
             dist = pow(x - wp.x, 2) + pow(y - wp.y, 2)
-
+            
             # Update the minimum distance and update the index
             if dist < min_dist:
                 min_dist = dist
