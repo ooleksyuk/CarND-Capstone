@@ -6,6 +6,7 @@ from styx_msgs.msg import Lane, Waypoint
 
 import math
 import sys
+import tf
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -38,6 +39,7 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
+        self.tf_listener = tf.TransformListener()
 
         # Current pose
         self.pose_stamped = None
@@ -57,6 +59,7 @@ class WaypointUpdater(object):
 
         num_waypoints = len(self.waypoints_stamped.waypoints)
 
+        # Find the closest waypoint to the current pose
         dist_min = sys.maxsize;
         wp_min = None
 
@@ -75,6 +78,14 @@ class WaypointUpdater(object):
                 dist_min = dist
                 wp_min = i
 
+        # The next waypoint should be ahead of the current pose.
+        # i.e. x co-ordinate of the next waypoint in car's reference frame should be positive
+        transformed_waypoint = self.transform_to_car_frame(self.waypoints_stamped.waypoints[wp_min].pose)
+
+        if transformed_waypoint != None and transformed_waypoint.pose.position.x <= 0.0:
+            wp_min += 1
+
+        # Construct the set of subsequent waypoints
         next_wps = [None] * LOOKAHEAD_WPS
 
         for wp in range(wp_min, wp_min + LOOKAHEAD_WPS):
@@ -82,16 +93,19 @@ class WaypointUpdater(object):
 
         lane = Lane()
         lane.waypoints = next_wps
-        lane.header.frame_id = '/world'
+        lane.header.frame_id = self.waypoints_stamped.header.frame_id
         lane.header.stamp = rospy.Time(0)
 
         self.final_waypoints_pub.publish(lane)
 
     def waypoints_cb(self, msg):
-        if self.waypoints_stamped == None:
-            self.waypoints_stamped = msg;
+        if self.waypoints_stamped != None:
+            return
+
+        self.waypoints_stamped = msg;
 
         for i in range(len(self.waypoints_stamped.waypoints)):
+            self.waypoints_stamped.waypoints[i].pose.header.frame_id = self.waypoints_stamped.header.frame_id
             self.set_waypoint_velocity(self.waypoints_stamped.waypoints, i, 20)
 
     def traffic_cb(self, msg):
@@ -116,6 +130,20 @@ class WaypointUpdater(object):
             wp1 = i
         return dist
 
+
+    def transform_to_car_frame(self, pose_stamped):
+        try:
+            self.tf_listener.waitForTransform("base_link", "world", rospy.Time(0), rospy.Duration(0.02))
+            transformed_pose_stamped = self.tf_listener.transformPose("base_link", pose_stamped)
+        except (tf.Exception, tf.LookupException, tf.ConnectivityException):
+            try:
+                self.tf_listener.waitForTransform("base_link", "world", rospy.Time(0), rospy.Duration(1.0))
+                transformed_pose_stamped = self.tf_listener.transformPose("base_link", pose_stamped)
+            except (tf.Exception, tf.LookupException, tf.ConnectivityException):
+                transformed_pose_stamped = None
+                rospy.logwarn("Failed to transform pose")
+
+        return transformed_pose_stamped
 
 if __name__ == '__main__':
     try:
