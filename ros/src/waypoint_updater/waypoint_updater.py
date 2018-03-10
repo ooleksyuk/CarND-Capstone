@@ -6,7 +6,6 @@ from styx_msgs.msg import Lane, Waypoint
 
 import math
 import sys
-from itertools import islice, cycle
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -56,25 +55,30 @@ class WaypointUpdater(object):
         if self.waypoints_stamped == None:
             return
 
+        num_waypoints = len(self.waypoints_stamped.waypoints)
+
         dist_min = sys.maxsize;
         wp_min = None
 
         x_ego = self.pose_stamped.pose.position.x;
         y_ego = self.pose_stamped.pose.position.y;
 
-        for i in range(len(self.waypoints_stamped.waypoints)):
+        for i in range(num_waypoints):
             waypoint = self.waypoints_stamped.waypoints[i]
 
             x_wp = waypoint.pose.pose.position.x;
             y_wp = waypoint.pose.pose.position.y;
 
-            dist = math.sqrt((x_ego-x_wp)**2 + (y_ego-y_wp)**2)
+            dist = (x_ego-x_wp)**2 + (y_ego-y_wp)**2
 
             if dist < dist_min:
                 dist_min = dist
                 wp_min = i
 
-        next_wps = list(islice(cycle(self.waypoints_stamped.waypoints), wp_min, wp_min + LOOKAHEAD_WPS - 1))
+        next_wps = [None] * LOOKAHEAD_WPS
+
+        for wp in range(wp_min, wp_min + LOOKAHEAD_WPS):
+            next_wps[wp - wp_min] = self.waypoints_stamped.waypoints[wp if (wp < num_waypoints) else (wp - num_waypoints)]
 
         lane = Lane()
         lane.waypoints = next_wps
@@ -88,7 +92,7 @@ class WaypointUpdater(object):
             self.waypoints_stamped = msg;
 
         for i in range(len(self.waypoints_stamped.waypoints)):
-            self.set_waypoint_velocity(self.waypoints_stamped.waypoints, i, 10)
+            self.set_waypoint_velocity(self.waypoints_stamped.waypoints, i, 20)
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
