@@ -41,29 +41,29 @@ class WaypointUpdater(object):
         # TODO: Add other member variables you need below
 
         # Current pose
-        self.pose = None
+        self.pose_stamped = None
 
         # Base waypoints
-        self.waypoints = None
+        self.waypoints_stamped = None
 
         rospy.spin()
 
     def pose_cb(self, msg):
         # TODO: Implement
-        self.pose = msg.pose
-        # rospy.loginfo("waypoint_updater:pose_cb:self.pose %s", self.pose)
+        self.pose_stamped = msg
+        # rospy.loginfo("waypoint_updater:pose_cb:self.pose_stamped %s", self.pose_stamped)
 
-        if self.waypoints == None:
+        if self.waypoints_stamped == None:
             return
 
         dist_min = sys.maxsize;
         wp_min = None
 
-        x_ego = self.pose.position.x;
-        y_ego = self.pose.position.y;
+        x_ego = self.pose_stamped.pose.position.x;
+        y_ego = self.pose_stamped.pose.position.y;
 
-        for i in range(len(self.waypoints)):
-            waypoint = self.waypoints[i]
+        for i in range(len(self.waypoints_stamped.waypoints)):
+            waypoint = self.waypoints_stamped.waypoints[i]
 
             x_wp = waypoint.pose.pose.position.x;
             y_wp = waypoint.pose.pose.position.y;
@@ -74,7 +74,7 @@ class WaypointUpdater(object):
                 dist_min = dist
                 wp_min = i
 
-        next_wps = list(islice(cycle(self.waypoints), wp_min, wp_min + LOOKAHEAD_WPS - 1))
+        next_wps = list(islice(cycle(self.waypoints_stamped.waypoints), wp_min, wp_min + LOOKAHEAD_WPS - 1))
 
         lane = Lane()
         lane.waypoints = next_wps
@@ -84,11 +84,11 @@ class WaypointUpdater(object):
         self.final_waypoints_pub.publish(lane)
 
     def waypoints_cb(self, msg):
-        if self.waypoints == None:
-            self.waypoints = msg.waypoints;
+        if self.waypoints_stamped == None:
+            self.waypoints_stamped = msg;
 
-        for i in range(len(self.waypoints)):
-            self.set_waypoint_velocity(self.waypoints, i, 10)
+        for i in range(len(self.waypoints_stamped.waypoints)):
+            self.set_waypoint_velocity(self.waypoints_stamped.waypoints, i, 10)
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
