@@ -45,9 +45,13 @@ class DBWNode(object):
         steer_ratio = rospy.get_param('~steer_ratio', 14.8)
         max_lat_accel = rospy.get_param('~max_lat_accel', 3.)
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
-        throttle_gains = [rospy.get_param('~throttle_k_p', 0.5), rospy.get_param('~throttle_k_i', 0.00001),rospy.get_param('~throttle_k_d', 0.0)]
 
+        min_speed = rospy.get_param('~min_speed', 0.5)
+        throttle_kp = rospy.get_param('~throttle_k_p', 0.5)
+        throttle_ki = rospy.get_param('~throttle_k_i', 0.00001)
+        throttle_kd = rospy.get_param('~throttle_k_d', 0.0 )
 
+        throttle_gains = [throttle_kp, throttle_ki, throttle_kd]
 
         self.steer_pub = rospy.Publisher('/vehicle/steering_cmd',
                                          SteeringCmd, queue_size=1)
@@ -64,7 +68,7 @@ class DBWNode(object):
         self.controller = Controller(
                 wheel_base = wheel_base,
                 steer_ratio = steer_ratio,
-                min_speed = 0.5,
+                min_speed = min_speed,
                 decel_limit = decel_limit,
                 accel_limit = accel_limit,
                 max_lat_accel = max_lat_accel,
