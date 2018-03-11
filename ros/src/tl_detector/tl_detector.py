@@ -56,18 +56,16 @@ class TLDetector(object):
 
         self.lights_wp = []
         self.stoplines_wp = []
-        self.upcoming_red_light_wp = -1
+
+        self.simulated_detection = True
 
         rospy.spin()
 
     def pose_cb(self, msg):
         self.pose_stamped = msg
 
-        upcoming_red_light_wp, state = self.process_traffic_lights()
-
-        if self.upcoming_red_light_wp != upcoming_red_light_wp:
-            self.upcoming_red_light_wp = upcoming_red_light_wp
-            self.upcoming_red_light_pub.publish(self.upcoming_red_light_wp)
+        light_wp, state = self.process_traffic_lights()
+        self.publish_upcoming_red_light(light_wp, state)
 
 
     def waypoints_cb(self, msg):
@@ -103,7 +101,9 @@ class TLDetector(object):
         self.has_image = True
         self.camera_image = msg
         light_wp, state = self.process_traffic_lights()
+        self.publish_upcoming_red_light(light_wp, state)
 
+    def publish_upcoming_red_light(self, light_wp, state):
         '''
         Publish upcoming red lights at camera frequency.
         Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
@@ -158,6 +158,10 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
+
+        if self.simulated_detection == True:
+            return TrafficLight.RED
+
         if(not self.has_image):
             self.prev_light_loc = None
             return False
