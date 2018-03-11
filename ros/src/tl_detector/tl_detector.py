@@ -64,15 +64,9 @@ class TLDetector(object):
     def pose_cb(self, msg):
         self.pose_stamped = msg
 
-        light_wp, state = self.process_traffic_lights()
-        self.publish_upcoming_red_light(light_wp, state)
-
-
     def waypoints_cb(self, msg):
         if self.waypoints_stamped != None:
             return
-
-        rospy.logwarn("waypoints_cb:")
 
         self.waypoints_stamped = msg
 
@@ -82,13 +76,18 @@ class TLDetector(object):
         self.calculate_traffic_light_waypoints()
 
     def traffic_cb(self, msg):
-        if self.lights != None:
-            return
+        if self.simulated_detection == True:
+            self.lights = msg.lights
+            self.calculate_traffic_light_waypoints()
 
-        rospy.logwarn("traffic_cb:")
+            light_wp, state = self.process_traffic_lights()
+            self.publish_upcoming_red_light(light_wp, state)
+        else:
+            if self.lights != None:
+                return
 
-        self.lights = msg.lights
-        self.calculate_traffic_light_waypoints()
+            self.lights = msg.lights
+            self.calculate_traffic_light_waypoints()
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -101,11 +100,23 @@ class TLDetector(object):
         self.has_image = True
         self.camera_image = msg
         light_wp, state = self.process_traffic_lights()
+
+        '''
+        Publish upcoming red lights at camera frequency.
+        '''
         self.publish_upcoming_red_light(light_wp, state)
 
     def publish_upcoming_red_light(self, light_wp, state):
+        """Publishes the index of the waypoint closest to the red light's 
+            stop line to /traffic_waypoint
+
+        Args:
+            light_wp: waypoint of the closest traffic light
+            state: state of the closest traffic light 
+
+        """
+
         '''
-        Publish upcoming red lights at camera frequency.
         Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
         of times till we start using it. Otherwise the previous stable state is
         used.
@@ -132,7 +143,7 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        #TODO implement
+        #TODO This function is currently O(n). It can be improved to O(log n)
         if self.waypoints_stamped == None:
             return None
 
@@ -160,7 +171,10 @@ class TLDetector(object):
         """
 
         if self.simulated_detection == True:
-            return TrafficLight.RED
+            if self.lights == None or light >= len(self.lights):
+                return TrafficLight.UNKNOWN
+
+            return self.lights[light].state
 
         if(not self.has_image):
             self.prev_light_loc = None
@@ -193,11 +207,31 @@ class TLDetector(object):
 
 
     def distance2(self, pose1, pose2):
+        """Calculate the square of the Eucleadian distance bentween the two poses given
+
+        Args:
+            pose1: given Pose
+            pose2: given Pose
+
+        Returns:
+            float: square of the Eucleadian distance bentween the two poses given
+
+        """
         dist2 = (pose1.position.x-pose2.position.x)**2 + (pose1.position.y-pose2.position.y)**2
         return dist2
 
 
     def transform_to_car_frame(self, pose_stamped):
+        """Transform the given pose to car co-ordinate frame
+
+        Args:
+            pose: given PoseStamped object
+
+        Returns:
+            PoseStamped: a PoseStamped object which is car co-ordinate frame equivalent
+                  of the given pose. (None if the tranformation failed)
+
+        """
         try:
             self.tf_listener.waitForTransform("base_link", "world", rospy.Time(0), rospy.Duration(0.02))
             transformed_pose_stamped = self.tf_listener.transformPose("base_link", pose_stamped)
@@ -212,6 +246,15 @@ class TLDetector(object):
         return transformed_pose_stamped
 
     def get_closest_stopline_pose(self, pose):
+        """Finds closest stopline to the given Pose
+
+        Args:
+            pose: given Pose
+
+        Returns:
+            Pose: a Pose object whose position is that of the closest stopline
+
+        """
         stop_line_positions = self.config['stop_line_positions']
 
         dist_min = sys.maxsize
@@ -232,15 +275,31 @@ class TLDetector(object):
         return stop_line_min
 
     def calculate_traffic_light_waypoints(self):
+        """Populate traffic light waypoints and stopline waypoints arrays if they are not already populated
+
+            self.lights_wp contains the closest waypoints to corresponding trafic lights in self.lights
+            self.stoplines_wp contains the waypoints of stoplines corrsponding to trafic lights in self.lights
+
+        """
         if self.waypoints_stamped != None and self.lights != None and len(self.lights_wp) == 0:
             for i in range(len(self.lights)):
                 stopline = self.get_closest_stopline_pose(self.lights[i].pose.pose)
                 self.stoplines_wp.append(self.get_closest_waypoint(stopline))
                 self.lights_wp.append(self.get_closest_waypoint(self.lights[i].pose.pose))
+
                 rospy.logwarn("calculate_traffic_light_waypoints: %d %f:%f %f:%f %d", self.lights_wp[i], self.lights[i].pose.pose.position.x, self.lights[i].pose.pose.position.y,
                     stopline.position.x, stopline.position.y, self.stoplines_wp[i])
 
     def get_closest_visible_traffic_light(self, pose):
+        """Finds closest visible traffic light to the given Pose
+
+        Args:
+            pose: given Pose
+
+        Returns:
+            int: index the closest visible traffic light (None if none exists)
+
+        """
         if self.waypoints_stamped == None or self.lights == None or len(self.lights_wp) == 0:
             return None
 
