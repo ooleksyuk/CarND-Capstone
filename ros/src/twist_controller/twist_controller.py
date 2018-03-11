@@ -23,20 +23,9 @@ class Controller(object):
         pid_gains = kwargs['throttle_gains']
         self.pid = PID(pid_gains[0], pid_gains[1], pid_gains[2])
 
-        self.t = None
-
     def control(self, target, current):
-        t = rospy.get_time()
-
-        # PID controller requires delta t. i.e. at least one timestep must have elapsed.
-        if self.t == None:
-            self.t = t
-            return 0.0, 0.0, 0.0
-
         # Speed control: PID controller step
-        delta_t = t - self.t
-        vx_error = target.linear.x - current.linear.x
-        u = self.pid.step(vx_error, delta_t)
+        u = self.pid.step(target.linear.x, current.linear.x, rospy.get_time())
 
         if u > 0:
             # Positive control input - accelerating
@@ -51,11 +40,7 @@ class Controller(object):
         steering = self.yaw_control.get_steering(target.linear.x, target.angular.z, current.linear.x)
         steering = self.lpf.filt(steering)
 
-        # Record current itme for next dalta t calculation
-        self.t = t
-
         return throttle, brake, steering
 
     def reset(self, *args, **kwargs):
-        self.t = rospy.get_time()
         self.pid.reset()
