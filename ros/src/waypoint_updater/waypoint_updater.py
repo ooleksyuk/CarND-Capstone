@@ -50,47 +50,30 @@ class WaypointUpdater(object):
         rospy.spin()
 
     def pose_cb(self, msg):
-        # TODO: Implement
         self.pose_stamped = msg
         # rospy.loginfo("waypoint_updater:pose_cb:self.pose_stamped %s", self.pose_stamped)
 
         if self.waypoints_stamped == None:
             return
 
-        num_waypoints = len(self.waypoints_stamped.waypoints)
-
         # Find the closest waypoint to the current pose
-        dist_min = sys.maxsize;
-        wp_min = None
-
-        x_ego = self.pose_stamped.pose.position.x;
-        y_ego = self.pose_stamped.pose.position.y;
-
-        for i in range(num_waypoints):
-            waypoint = self.waypoints_stamped.waypoints[i]
-
-            x_wp = waypoint.pose.pose.position.x;
-            y_wp = waypoint.pose.pose.position.y;
-
-            dist = (x_ego-x_wp)**2 + (y_ego-y_wp)**2
-
-            if dist < dist_min:
-                dist_min = dist
-                wp_min = i
+        next_waypoint = self.get_closest_waypoint(self.pose_stamped.pose)
 
         # The next waypoint should be ahead of the current pose.
         # i.e. x co-ordinate of the next waypoint in car's reference frame should be positive
-        transformed_waypoint = self.transform_to_car_frame(self.waypoints_stamped.waypoints[wp_min].pose)
+        transformed_waypoint = self.transform_to_car_frame(self.waypoints_stamped.waypoints[next_waypoint].pose)
 
         if transformed_waypoint != None and transformed_waypoint.pose.position.x <= 0.0:
-            wp_min += 1
+            next_waypoint += 1
 
         # Construct the set of subsequent waypoints
+        num_waypoints = len(self.waypoints_stamped.waypoints)
         next_wps = [None] * LOOKAHEAD_WPS
 
-        for wp in range(wp_min, wp_min + LOOKAHEAD_WPS):
-            next_wps[wp - wp_min] = self.waypoints_stamped.waypoints[wp if (wp < num_waypoints) else (wp - num_waypoints)]
+        for wp in range(next_waypoint, next_waypoint + LOOKAHEAD_WPS):
+            next_wps[wp - next_waypoint] = self.waypoints_stamped.waypoints[wp if (wp < num_waypoints) else (wp - num_waypoints)]
 
+        # Construct final_waypoints message
         lane = Lane()
         lane.waypoints = next_wps
         lane.header.frame_id = self.waypoints_stamped.header.frame_id
@@ -102,7 +85,7 @@ class WaypointUpdater(object):
         if self.waypoints_stamped != None:
             return
 
-        self.waypoints_stamped = msg;
+        self.waypoints_stamped = msg
 
         for i in range(len(self.waypoints_stamped.waypoints)):
             self.waypoints_stamped.waypoints[i].pose.header.frame_id = self.waypoints_stamped.header.frame_id
@@ -130,6 +113,25 @@ class WaypointUpdater(object):
             wp1 = i
         return dist
 
+    def distance2(self, pose1, pose2):
+        dist2 = (pose1.position.x-pose2.position.x)**2 + (pose1.position.y-pose2.position.y)**2
+        return dist2
+
+    def get_closest_waypoint(self, pose):
+        if self.waypoints_stamped == None:
+            return None
+
+        dist_min = sys.maxsize
+        wp_min = None
+
+        for wp in range(len(self.waypoints_stamped.waypoints)):
+            dist = self.distance2(pose, self.waypoints_stamped.waypoints[wp].pose.pose)
+
+            if dist < dist_min:
+                dist_min = dist
+                wp_min = wp
+
+        return wp_min
 
     def transform_to_car_frame(self, pose_stamped):
         try:
