@@ -31,6 +31,8 @@ that we have created in the `__init__` function.
 
 '''
 
+SAMPLE_RATE = 50 # 50Hz
+
 class DBWNode(object):
     def __init__(self):
         rospy.init_node('dbw_node')
@@ -47,6 +49,7 @@ class DBWNode(object):
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
 
         min_speed = rospy.get_param('~min_speed', 0.5)
+        steering_tau = rospy.get_param('~steering_tau', 0.5)
         throttle_kp = rospy.get_param('~throttle_k_p', 0.5)
         throttle_ki = rospy.get_param('~throttle_k_i', 0.00001)
         throttle_kd = rospy.get_param('~throttle_k_d', 0.0 )
@@ -73,7 +76,9 @@ class DBWNode(object):
                 accel_limit = accel_limit,
                 max_lat_accel = max_lat_accel,
                 max_steer_angle = max_steer_angle,
-                throttle_gains = throttle_gains)
+                throttle_gains = throttle_gains,
+                steering_tau = steering_tau, 
+                sample_rate = SAMPLE_RATE)
 
         # Subscribe to topics
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb, queue_size=1)
@@ -83,7 +88,7 @@ class DBWNode(object):
         self.loop()
 
     def loop(self):
-        rate = rospy.Rate(50) # 50Hz
+        rate = rospy.Rate(SAMPLE_RATE)
         while not rospy.is_shutdown():
             if self.dbw_enabled == True:
                 throttle, brake, steer = self.controller.control(self.twist_cmd, self.current_velocity)

@@ -17,7 +17,7 @@ class Controller(object):
                 kwargs['min_speed'],
                 kwargs['max_lat_accel'],
                 kwargs['max_steer_angle'])
-        self.lpf = LowPassFilter(0.2,0.1)
+        self.lpf = LowPassFilter(kwargs['steering_tau'], 1.0/kwargs['sample_rate'])
 
         # Speed control: PID controller
         pid_gains = kwargs['throttle_gains']
@@ -34,11 +34,14 @@ class Controller(object):
         else:
             # Negative control input - decelerating
             throttle = 0.0
-            brake = 10.0
+            brake = 100.0
 
         # Steering control: yaw controller step followed by  a low pass filter step
         steering = self.yaw_control.get_steering(target.linear.x, target.angular.z, current.linear.x)
         steering = self.lpf.filt(steering)
+
+        # rospy.logwarn("current %04.3f target %04.3f target w %04.3f u %04.3f %04.3f:%04.3f:%04.3f",
+        #     current.linear.x, target.linear.x, target.angular.z, u, throttle, brake, steering)
 
         return throttle, brake, steering
 
