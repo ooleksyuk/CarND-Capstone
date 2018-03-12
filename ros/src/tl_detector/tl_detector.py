@@ -16,6 +16,7 @@ import sys
 import tf
 
 STATE_COUNT_THRESHOLD = 3
+TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250 # 250m
 
 class TLDetector(object):
     def __init__(self):
@@ -322,6 +323,11 @@ class TLDetector(object):
 
         if light_min >= num_lights:
             light_min -= num_lights
+
+        dist2 = self.distance2(pose, self.waypoints_stamped.waypoints[self.lights_wp[light_min]].pose.pose)
+
+        if dist2 > (TRAFFIC_LIGHT_VISIBLE_DISTANCE**2):
+            return None
 
         return light_min
 
