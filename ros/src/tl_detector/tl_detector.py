@@ -16,7 +16,7 @@ import sys
 import tf
 
 STATE_COUNT_THRESHOLD = 3
-TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250 # 250m
+TRAFFIC_LIGHT_VISIBLE_DISTANCE = 100 # 100m
 
 class TLDetector(object):
     def __init__(self):
@@ -288,8 +288,8 @@ class TLDetector(object):
                 self.stoplines_wp.append(self.get_closest_waypoint(stopline))
                 self.lights_wp.append(self.get_closest_waypoint(self.lights[i].pose.pose))
 
-                rospy.logwarn("calculate_traffic_light_waypoints: %d %f:%f %f:%f %d", self.lights_wp[i], self.lights[i].pose.pose.position.x, self.lights[i].pose.pose.position.y,
-                    stopline.position.x, stopline.position.y, self.stoplines_wp[i])
+                # rospy.logwarn("calculate_traffic_light_waypoints: %d %f:%f %f:%f %d", self.lights_wp[i], self.lights[i].pose.pose.position.x, self.lights[i].pose.pose.position.y,
+                #     stopline.position.x, stopline.position.y, self.stoplines_wp[i])
 
     def get_closest_visible_traffic_light(self, pose):
         """Finds closest visible traffic light to the given Pose
