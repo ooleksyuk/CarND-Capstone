@@ -58,7 +58,7 @@ class TLDetector(object):
         self.lights_wp = []
         self.stoplines_wp = []
 
-        self.simulated_detection = True
+        self.simulated_detection = rospy.get_param('~simulated_detection', 0)
 
         rospy.spin()
 
@@ -77,7 +77,7 @@ class TLDetector(object):
         self.calculate_traffic_light_waypoints()
 
     def traffic_cb(self, msg):
-        if self.simulated_detection == True:
+        if self.simulated_detection > 0:
             self.lights = msg.lights
             self.calculate_traffic_light_waypoints()
 
@@ -171,7 +171,7 @@ class TLDetector(object):
 
         """
 
-        if self.simulated_detection == True:
+        if self.simulated_detection > 0:
             if self.lights == None or light >= len(self.lights):
                 return TrafficLight.UNKNOWN
 
