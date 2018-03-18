@@ -2,6 +2,7 @@
 
 import rospy
 from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import TwistStamped
 from styx_msgs.msg import Lane, Waypoint
 from std_msgs.msg import Int32
 
@@ -10,6 +11,7 @@ import sys
 import tf
 
 from utilities.kdtree import kdtree
+from utilities.hysteresis import hysteresis
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -28,6 +30,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 MAX_SPEED = 20.0
+MIN_ACCELERATION = -0.5
 
 
 class WaypointUpdater(object):
@@ -39,18 +42,19 @@ class WaypointUpdater(object):
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
         rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
-
+        rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb, queue_size=1)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
         self.waypoint_tree = None
+        self.waypoint_speeds = []
         self.tf_listener = tf.TransformListener()
         self.red_light_waypoint = None
         self.next_waypoint = -1
-        self.current_speed = 0.0
+        self.current_speed = None
         self.trajectory_target_speed = 0.0
-        self.trajectory_acceleration = 0.0
+        self.trajectory_speed_hysteresis = hysteresis(2.0, 2.1, 0.0)
 
         # Current pose
         self.pose_stamped = None
@@ -65,7 +69,7 @@ class WaypointUpdater(object):
         # rospy.loginfo("waypoint_updater:pose_cb:self.pose_stamped %s", self.pose_stamped)
 
         # Do nothing until all messages have been recieved
-        if self.waypoints_stamped == None or self.red_light_waypoint == None:
+        if self.waypoints_stamped == None or self.red_light_waypoint == None or self.current_speed == None:
             return
 
         # Find the closest waypoint to the current pose
@@ -90,13 +94,9 @@ class WaypointUpdater(object):
         next_wps = [None] * LOOKAHEAD_WPS
 
         for _wp, wp in enumerate(range(next_waypoint, next_waypoint + LOOKAHEAD_WPS)):
-            next_wps[_wp] = self.waypoints_stamped.waypoints[wp if (wp < num_waypoints) else (wp - num_waypoints)]
-            self.set_waypoint_velocity(next_wps, _wp, self.get_trajectory_speed_at_waypoint(_wp))
-
-        # This is a make shift way of working out the current speed
-        if self.next_waypoint != next_waypoint:
-            self.next_waypoint = next_waypoint
-            self.current_speed = self.get_waypoint_velocity(next_wps[0])
+            wp_index = wp if (wp < num_waypoints) else (wp - num_waypoints)
+            next_wps[_wp] = self.waypoints_stamped.waypoints[wp_index]
+            self.set_waypoint_velocity(next_wps, _wp, min(self.waypoint_speeds[wp_index], self.get_trajectory_speed_at_waypoint(_wp)))
 
         # Construct final_waypoints message
         lane = Lane()
@@ -114,7 +114,7 @@ class WaypointUpdater(object):
 
         for i in range(len(self.waypoints_stamped.waypoints)):
             self.waypoints_stamped.waypoints[i].pose.header.frame_id = self.waypoints_stamped.header.frame_id
-            self.set_waypoint_velocity(self.waypoints_stamped.waypoints, i, 0.0)
+            self.waypoint_speeds.append(MAX_SPEED) # TODO: use actual waypoint speeds
 
         self.waypoint_tree = kdtree([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y) for waypoint in self.waypoints_stamped.waypoints], 2)
 
@@ -124,6 +124,9 @@ class WaypointUpdater(object):
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
         pass
+
+    def current_velocity_cb(self, msg):
+        self.current_speed = msg.twist.linear.x
 
     def get_waypoint_velocity(self, waypoint):
         return waypoint.twist.twist.linear.x
@@ -201,20 +204,18 @@ class WaypointUpdater(object):
             next_waypoint: index of the next waypoint
 
         """
-        num_waypoints = len(self.waypoints_stamped.waypoints)
-
-        self.trajectory_target_speed = MAX_SPEED
-        waypoints_to_target = 20
+        max_speed = self.waypoint_speeds[next_waypoint]
 
         if self.red_light_waypoint > 0:
-            self.trajectory_target_speed = 0.0
-            waypoints_to_target = 0 if (self.red_light_waypoint >= next_waypoint) else num_waypoints
-            waypoints_to_target += (self.red_light_waypoint - next_waypoint)
+            # u = speed at next waypoint  0 = speed at traffic light waypoint a = acceleration
+            # s = distance between next waypoint and traffic light waypoint 
+            # then, u = sqrt(-2 * a * s)
+            stopping_distance = self.distance(self.waypoints_stamped.waypoints, next_waypoint, self.red_light_waypoint)
+            trajectory_target_speed = min(self.current_speed, min(max_speed, math.sqrt(-2.0 * MIN_ACCELERATION * stopping_distance)))
+        else:
+            trajectory_target_speed = max_speed
 
-        # The 'acceleration' here is speed/distance (m/s/m) not speed/time (m/s^2)
-        # This is only a crude way of getting the car to stop somewhat smoothly
-        # I am assuming that the waypoints are spaced reasonably evenly
-        self.trajectory_acceleration = (self.trajectory_target_speed - self.current_speed) / waypoints_to_target if (waypoints_to_target != 0) else 0.0
+        self.trajectory_target_speed  = self.trajectory_speed_hysteresis.output(trajectory_target_speed)
 
     def get_trajectory_speed_at_waypoint(self, waypoint):
         """Get the expected speed at the given waypoint as per the
@@ -227,8 +228,7 @@ class WaypointUpdater(object):
             float: trajectory speed at the given waypoint
 
         """
-        # The +1 is to make the speed at 0th waypoin non-zero. Waypoint follower seem to want this.
-        return self.current_speed + (waypoint + 1) * self.trajectory_acceleration
+        return self.trajectory_target_speed
 
 
 if __name__ == '__main__':
