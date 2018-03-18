@@ -58,7 +58,10 @@ class TLDetector(object):
         self.lights_wp = []
         self.stoplines_wp = []
 
+        self.camera_callback_count = 0
+
         self.simulated_detection = rospy.get_param('~simulated_detection', 0)
+        self.tl_detection_interval_frames = rospy.get_param('~tl_detection_interval_frames', 1)
 
         rospy.spin()
 
@@ -98,6 +101,14 @@ class TLDetector(object):
             msg (Image): image from car-mounted camera
 
         """
+
+        self.camera_callback_count += 1
+
+        if self.camera_callback_count < self.tl_detection_interval_frames:
+            return
+        
+        self.camera_callback_count = 0
+
         self.has_image = True
         self.camera_image = msg
         light_wp, state = self.process_traffic_lights()
