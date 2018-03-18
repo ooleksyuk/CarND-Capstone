@@ -49,6 +49,7 @@ class DBWNode(object):
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
 
         min_speed = rospy.get_param('~min_speed', 0.5)
+        max_speed = rospy.get_param('waypoint_loader/velocity', 40) / 3.6 # convert km/h to m/s
         steering_tau = rospy.get_param('~steering_tau', 0.0)
         throttle_kp = rospy.get_param('~throttle_k_p', 0.5)
         throttle_ki = rospy.get_param('~throttle_k_i', 0.00001)
@@ -72,11 +73,16 @@ class DBWNode(object):
                 wheel_base = wheel_base,
                 steer_ratio = steer_ratio,
                 min_speed = min_speed,
+                max_speed = max_speed,
                 decel_limit = decel_limit,
                 accel_limit = accel_limit,
                 max_lat_accel = max_lat_accel,
                 max_steer_angle = max_steer_angle,
+                vehicle_mass = vehicle_mass,
+                fuel_capacity = fuel_capacity,
+                brake_deadband = brake_deadband,
                 throttle_gains = throttle_gains,
+                wheel_radius = wheel_radius,
                 steering_tau = steering_tau, 
                 sample_rate = SAMPLE_RATE)
 
