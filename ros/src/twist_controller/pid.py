@@ -4,13 +4,15 @@ MAX_NUM = float('inf')
 
 
 class PID(object):
-    def __init__(self, kp, ki, kd, mn=MIN_NUM, mx=MAX_NUM):
+    def __init__(self, kp, ki, kd, max_input=MAX_NUM, mn=MIN_NUM, mx=MAX_NUM):
         # PID parameters
         self.kp = kp
         self.ki = ki
         self.kd = kd
         self.min = mn
         self.max = mx
+        # This is a crude approximation
+        self.max_abs_u = (abs(self.kp) + abs(self.ki) + abs(self.kd)) * abs(max_input)
 
         # Controller state
         self.t = None

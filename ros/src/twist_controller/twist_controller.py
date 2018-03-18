@@ -21,7 +21,11 @@ class Controller(object):
 
         # Speed control: PID controller
         pid_gains = kwargs['throttle_gains']
-        self.pid = PID(pid_gains[0], pid_gains[1], pid_gains[2])
+        self.pid = PID(pid_gains[0], pid_gains[1], pid_gains[2], kwargs['max_speed'])
+
+        total_mass = kwargs['vehicle_mass'] + kwargs['fuel_capacity']*GAS_DENSITY
+        self.max_brake_torque = total_mass * kwargs['decel_limit'] * kwargs['wheel_radius']
+        self.min_brake = -1.0 * kwargs['brake_deadband']
 
     def control(self, target, current):
         # Speed control: PID controller step
@@ -34,7 +38,7 @@ class Controller(object):
         else:
             # Negative control input - decelerating
             throttle = 0.0
-            brake = 100.0
+            brake = self.max_brake_torque * min(self.min_brake, u/self.pid.max_abs_u)
 
         # Steering control: yaw controller step followed by  a low pass filter step
         steering = self.yaw_control.get_steering(target.linear.x, target.angular.z, current.linear.x)
