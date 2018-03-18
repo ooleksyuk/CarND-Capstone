@@ -29,7 +29,6 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-MAX_SPEED = 20.0
 MIN_ACCELERATION = -0.5
 
 
@@ -45,6 +44,8 @@ class WaypointUpdater(object):
         rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb, queue_size=1)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
+
+        self.speed_limit = rospy.get_param('waypoint_loader/velocity', 40) / 3.6 # convert km/h to m/s
 
         # TODO: Add other member variables you need below
         self.waypoint_tree = None
@@ -114,7 +115,7 @@ class WaypointUpdater(object):
 
         for i in range(len(self.waypoints_stamped.waypoints)):
             self.waypoints_stamped.waypoints[i].pose.header.frame_id = self.waypoints_stamped.header.frame_id
-            self.waypoint_speeds.append(MAX_SPEED) # TODO: use actual waypoint speeds
+            self.waypoint_speeds.append(self.speed_limit) # TODO: use actual waypoint speeds
 
         self.waypoint_tree = kdtree([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y) for waypoint in self.waypoints_stamped.waypoints], 2)
 
