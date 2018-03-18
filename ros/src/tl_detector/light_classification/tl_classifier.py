@@ -30,12 +30,13 @@ class TLClassifier(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        resized = cv2.resize(image, (self.width,self.height))
-        resized = resized / 255.; # Normalization
+        resized = cv2.resize(image, (self.width, self.height))
+        resized = resized / 255.;  # Normalization
+
         # necessary work around to avoid troubles with keras
         with self.graph.as_default():
             predictions = self.model.predict(resized.reshape((1, self.height, self.width, self.channels)))
-            color =  predictions[0].tolist().index(np.max(predictions[0]))
+            color = predictions[0].tolist().index(np.max(predictions[0]))
             tl = TrafficLight()
             tl.state = color
             return tl.state
