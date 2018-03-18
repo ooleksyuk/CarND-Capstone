@@ -10,23 +10,25 @@ from light_classification.tl_classifier import TLClassifier
 from dummy_detector import DummyDetector
 import tf
 import math
-import tensorflow as tf
 import cv2
 import yaml
 import sys
-from keras.models import load_model
-from keras import backend as K
+import numpy as np
+from keras.models import load_model, model_from_json
+from keras.utils.generic_utils import get_custom_objects
+from keras import backend
 
 STATE_COUNT_THRESHOLD = 3
-TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250 # 250m
+TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250  # 250m
 SMOOTH = 1.
+LABELS = list(enumerate(['Red', 'Yellow', 'Green', 'None']))
 
 
 def dice_coef(y_true, y_pred):
-    y_true_f = K.flatten(y_true)
-    y_pred_f = K.flatten(y_pred)
-    intersection = K.sum(y_true_f * y_pred_f)
-    return (2. * intersection + SMOOTH) / (K.sum(y_true_f) + K.sum(y_pred_f) + SMOOTH)
+    y_true_f = backend.flatten(y_true)
+    y_pred_f = backend.flatten(y_pred)
+    intersection = backend.sum(y_true_f * y_pred_f)
+    return (2. * intersection + SMOOTH) / (backend.sum(y_true_f) + backend.sum(y_pred_f) + SMOOTH)
 
 
 def dice_coef_loss(y_true, y_pred):
@@ -44,6 +46,7 @@ class TLDetector(object):
         self.has_image = False
         self.light_classifier = TLClassifier()
         self.tf_listener = tf.TransformListener()
+        self.prev_light_loc = None
 
         self.state = TrafficLight.UNKNOWN
         self.last_state = TrafficLight.UNKNOWN
@@ -59,6 +62,7 @@ class TLDetector(object):
         self.config = yaml.load(config_string)
 
         # Classifier Setup
+        rospy.loginfo("[TL_DETECTOR] Loading TLClassifier model")
         self.light_classifier = TLClassifier()
         model = load_model(self.config['tl']['tl_classification_model'])
         resize_width = self.config['tl']['classifier_resize_width']
@@ -67,9 +71,21 @@ class TLDetector(object):
         self.invalid_class_number = 3
 
         # Detector setup
-        self.detector_model = load_model(self.config['tl']['tl_detection_model'],
-                                         custom_objects={'dice_coef_loss': dice_coef_loss, 'dice_coef': dice_coef})
-        self.detector_model._make_predict_function()
+        rospy.loginfo("[TL_DETECTOR] Loading TLDetector model")
+        custom_objects = {'dice_coef_loss': dice_coef_loss, 'dice_coef': dice_coef}
+        # self.detector_model = load_model(self.config['tl']['tl_detection_model'],
+        #                                  custom_objects=custom_objects)
+        # load json and create model
+        get_custom_objects().update(custom_objects)
+        json_file = open(self.config['tl']['tl_detector_model_json'], 'r')
+        loaded_model_json = json_file.read()
+        json_file.close()
+        loaded_model = model_from_json(loaded_model_json)
+        # load weights into new model
+        loaded_model.load_weights(self.config['tl']['tl_detection_model'])
+        rospy.loginfo("[TL_DETECTOR] Loaded models from disk")
+
+        # self.detector_model._make_predict_function()
         self.resize_width = self.config['tl']['detector_resize_width']
         self.resize_height = self.config['tl']['detector_resize_height']
 
@@ -101,13 +117,32 @@ class TLDetector(object):
         rospy.spin()
 
     def pose_cb(self, msg):
-        self.pose = msg
+        self.pose_stamped = msg
 
-    def waypoints_cb(self, waypoints):
-        self.waypoints = waypoints
+    def waypoints_cb(self, msg):
+        if self.waypoints_stamped is not None:
+            return
+
+        self.waypoints_stamped = msg
+
+        for i in range(len(self.waypoints_stamped.waypoints)):
+                    self.waypoints_stamped.waypoints[i].pose.header.frame_id = self.waypoints_stamped.header.frame_id
+
+        self.calculate_traffic_light_waypoints()
 
     def traffic_cb(self, msg):
-        self.lights = msg.lights
+        if self.simulated_detection is True:
+            self.lights = msg.lights
+            self.calculate_traffic_light_waypoints()
+
+            light_wp, state = self.process_traffic_lights()
+            self.publish_upcoming_red_light(light_wp, state)
+        else:
+            if self.lights is not None:
+                return
+
+            self.lights = msg.lights
+            self.calculate_traffic_light_waypoints()
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -123,6 +158,17 @@ class TLDetector(object):
 
         '''
         Publish upcoming red lights at camera frequency.
+        '''
+        self.publish_upcoming_red_light(light_wp, state)
+
+    def publish_upcoming_red_light(self, light_wp, state):
+        """Publishes the index of the waypoint closest to the red light's 
+            stop line to /traffic_waypoint
+        Args:
+            light_wp: waypoint of the closest traffic light
+            state: state of the closest traffic light 
+        """
+        '''
         Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
         of times till we start using it. Otherwise the previous stable state is
         used.
@@ -149,17 +195,30 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        #TODO implement
-        return 0
-
-    def _extract_image(self, pred_image_mask, image):
-        if (np.max(pred_image_mask) < self.projection_min):
+        #TODO This function is currently O(n). It can be improved to O(log n)
+        if self.waypoints_stamped is None:
             return None
 
-        row_projection = np.sum(pred_image_mask, axis = 1)
-        row_index =  np.argmax(row_projection)
+        dist_min = sys.maxsize
+        wp_min = None
 
-        if (np.max(row_projection) < self.projection_threshold):
+        for wp in range(len(self.waypoints_stamped.waypoints)):
+            dist = self.distance2(pose, self.waypoints_stamped.waypoints[wp].pose.pose)
+
+            if dist < dist_min:
+                dist_min = dist
+                wp_min = wp
+
+        return wp_min
+
+    def extract_image(self, pred_image_mask, image):
+        if np.max(pred_image_mask) < self.projection_min:
+            return None
+
+        row_projection = np.sum(pred_image_mask, axis=1)
+        row_index = np.argmax(row_projection)
+
+        if np.max(row_projection) < self.projection_threshold:
             return None
 
         zero_row_indexes = np.argwhere(row_projection <= self.projection_threshold)
@@ -168,37 +227,39 @@ class TLDetector(object):
         bottom_part = zero_row_indexes[zero_row_indexes > row_index]
         bottom = np.min(bottom_part) if bottom_part.size > 0 else self.resize_height
 
-        roi = pred_image_mask[top:bottom,:]
-        column_projection = np.sum(roi, axis = 0)
+        roi = pred_image_mask[top:bottom, :]
+        column_projection = np.sum(roi, axis=0)
 
-        if (np.max(column_projection) < self.projection_min):
+        if np.max(column_projection) < self.projection_min:
             return None
 
         non_zero_column_index = np.argwhere(column_projection > self.projection_min)
 
-        index_of_column_index =  np.argmin(np.abs(non_zero_column_index - self.middle_col))
+        index_of_column_index = np.argmin(np.abs(non_zero_column_index - self.middle_col))
         column_index = non_zero_column_index[index_of_column_index][0]
 
-        zero_colum_indexes = np.argwhere(column_projection == 0)
-        left_side = zero_colum_indexes[zero_colum_indexes < column_index]
+        zero_column_indexes = np.argwhere(column_projection == 0)
+        left_side = zero_column_indexes[zero_column_indexes < column_index]
         left = np.max(left_side) if left_side.size > 0 else 0
-        right_side = zero_colum_indexes[zero_colum_indexes > column_index]
+        right_side = zero_column_indexes[zero_column_indexes > column_index]
         right = np.min(right_side) if right_side.size > 0 else self.resize_width
-        return image[int(top*self.resize_height_ratio):int(bottom*self.resize_height_ratio), int(left*self.resize_width_ratio):int(right*self.resize_width_ratio)]
+        return image[int(top * self.resize_height_ratio):int(bottom * self.resize_height_ratio),
+                     int(left * self.resize_width_ratio):int(right * self.resize_width_ratio)]
 
     def detect_traffic_light(self, cv_image):
-        resize_image = cv2.cvtColor(cv2.resize(cv_image, (self.resize_width, self.resize_height)), cv2.COLOR_RGB2GRAY)
+        resize_image = cv2.resize(cv_image, (self.resize_width, self.resize_height))
+        resize_image = cv2.cvtColor(resize_image, cv2.COLOR_RGB2GRAY)
         resize_image = resize_image[..., np.newaxis]
         if self.is_carla:
-            mean = np.mean(resize_image) # mean for data centering
-            std = np.std(resize_image) # std for data normalization
+            mean = np.mean(resize_image)  # mean for data centering
+            std = np.std(resize_image)  # std for data normalization
 
             resize_image -= mean
             resize_image /= std
 
         image_mask = self.detector_model.predict(resize_image[None, :, :, :], batch_size=1)[0]
-        image_mask = (image_mask[:,:,0]*255).astype(np.uint8)
-        return self._extract_image(image_mask, cv_image)
+        image_mask = (image_mask[:, :, 0] * 255).astype(np.uint8)
+        return self.extract_image(image_mask, cv_image)
 
     def get_light_state(self, light):
         """Determines the current color of the traffic light
@@ -210,14 +271,27 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        if(not self.has_image):
+        if self.simulated_detection is True:
+            if self.lights is None or light >= len(self.lights):
+                rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+                return TrafficLight.UNKNOWN
+            state = self.lights[light].state
+            return state
+
+        if not self.has_image:
             self.prev_light_loc = None
-            return False
+            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+            return TrafficLight.UNKNOWN
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-
-        #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, self.color_mode)
+        tl_image = self.detect_traffic_light(cv_image)
+        if tl_image is not None:
+            state = self.light_classifier.get_classification(tl_image)
+            state = state if (state != self.invalid_class_number) else TrafficLight.UNKNOWN
+            return state
+        else:
+            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+            return TrafficLight.UNKNOWN
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -228,7 +302,69 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        light = None
+        if self.pose_stamped is None or len(self.stoplines_wp) == 0:
+            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+            return -1, TrafficLight.UNKNOWN
+
+        # find the closest visible traffic light (if one exists)
+        light = self.get_closest_visible_traffic_light(self.pose_stamped.pose)
+
+        if light is None:
+            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+            return -1, TrafficLight.UNKNOWN
+        state = self.get_light_state(light)
+        rospy.loginfo("[TL_DETECTOR] Nearest TL-state is: %s", LABELS[state][1])
+
+        return self.stoplines_wp[light], state
+
+    def distance2(self, pose1, pose2):
+        """Calculate the square of the Eucleadian distance bentween the two poses given
+
+        Args:
+            pose1: given Pose
+            pose2: given Pose
+
+        Returns:
+            float: square of the Eucleadian distance bentween the two poses given
+
+        """
+        dist2 = (pose1.position.x-pose2.position.x)**2 + (pose1.position.y-pose2.position.y)**2
+        return dist2
+
+
+    def transform_to_car_frame(self, pose_stamped):
+        """Transform the given pose to car co-ordinate frame
+
+        Args:
+            pose: given PoseStamped object
+
+        Returns:
+            PoseStamped: a PoseStamped object which is car co-ordinate frame equivalent
+                  of the given pose. (None if the tranformation failed)
+
+        """
+        try:
+            self.tf_listener.waitForTransform("base_link", "world", rospy.Time(0), rospy.Duration(0.02))
+            transformed_pose_stamped = self.tf_listener.transformPose("base_link", pose_stamped)
+        except (tf.Exception, tf.LookupException, tf.ConnectivityException):
+            try:
+                self.tf_listener.waitForTransform("base_link", "world", rospy.Time(0), rospy.Duration(1.0))
+                transformed_pose_stamped = self.tf_listener.transformPose("base_link", pose_stamped)
+            except (tf.Exception, tf.LookupException, tf.ConnectivityException):
+                transformed_pose_stamped = None
+                rospy.logwarn("Failed to transform pose")
+
+        return transformed_pose_stamped
+
+    def get_closest_stopline_pose(self, pose):
+        """Finds closest stopline to the given Pose
+
+        Args:
+            pose: given Pose
+
+        Returns:
+            Pose: a Pose object whose position is that of the closest stopline
+        """
 
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
@@ -242,6 +378,63 @@ class TLDetector(object):
             return light_wp, state
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN
+
+
+    def calculate_traffic_light_waypoints(self):
+        """Populate traffic light waypoints and stopline waypoints arrays if they are not already populated
+
+            self.lights_wp contains the closest waypoints to corresponding trafic lights in self.lights
+            self.stoplines_wp contains the waypoints of stoplines corrsponding to trafic lights in self.lights
+
+        """
+        if self.waypoints_stamped is not None and self.lights is not None and len(self.lights_wp) == 0:
+            for i in range(len(self.lights)):
+                stopline = self.get_closest_stopline_pose(self.lights[i].pose.pose)
+                self.stoplines_wp.append(self.get_closest_waypoint(stopline))
+                self.lights_wp.append(self.get_closest_waypoint(self.lights[i].pose.pose))
+
+                rospy.logwarn("calculate_traffic_light_waypoints: %d %f:%f %f:%f %d", self.lights_wp[i], self.lights[i].pose.pose.position.x, self.lights[i].pose.pose.position.y,
+                    stopline.position.x, stopline.position.y, self.stoplines_wp[i])
+
+    def get_closest_visible_traffic_light(self, pose):
+        """Finds closest visible traffic light to the given Pose
+
+        Args:
+            pose: given Pose
+
+        Returns:
+            int: index the closest visible traffic light (None if none exists)
+
+        """
+        if self.waypoints_stamped is None or self.lights is None or len(self.lights_wp) == 0:
+            return None
+
+        num_lights = len(self.lights_wp)
+
+        dist_min = sys.maxsize
+        light_min = None
+
+        for light in range(num_lights):
+            dist = self.distance2(pose, self.waypoints_stamped.waypoints[self.lights_wp[light]].pose.pose)
+
+            if dist < dist_min:
+                dist_min = dist
+                light_min = light
+
+        transformed_waypoint = self.transform_to_car_frame(self.waypoints_stamped.waypoints[self.lights_wp[light_min]].pose)
+
+        if transformed_waypoint is not None and transformed_waypoint.pose.position.x <= 0.0:
+            light_min += 1
+
+        if light_min >= num_lights:
+            light_min -= num_lights
+
+        dist2 = self.distance2(pose, self.waypoints_stamped.waypoints[self.lights_wp[light_min]].pose.pose)
+
+        if dist2 > (TRAFFIC_LIGHT_VISIBLE_DISTANCE**2):
+            return None
+
+        return light_min
 
 
 detector = 'dummy'
