@@ -85,7 +85,7 @@ class WaypointUpdater(object):
 
         num_waypoints = len(self.waypoints_stamped.waypoints)
 
-        if next_waypoint > num_waypoints:
+        if next_waypoint >= num_waypoints:
             next_waypoint -= num_waypoints
 
         # Calculate a trajectory
