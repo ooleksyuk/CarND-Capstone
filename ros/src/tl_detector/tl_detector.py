@@ -56,11 +56,10 @@ class TLDetector(object):
         self.lights_wp = []
         self.stoplines_wp = []
 
-        self.simulated_detection = True
         self.camera_callback_count = 0
 
-        self.simulated_detection = rospy.get_param('~simulated_detection', 0)
-        self.tl_detection_interval_frames = rospy.get_param('~tl_detection_interval_frames', 1)
+        self.simulated_detection = rospy.get_param('~simulated_detection', 1)
+        self.tl_detection_interval_frames = rospy.get_param('~tl_detection_interval_frames', 10)
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
@@ -136,7 +135,7 @@ class TLDetector(object):
         self.calculate_traffic_light_waypoints()
 
     def traffic_cb(self, msg):
-        if self.simulated_detection is True:
+        if self.simulated_detection > 0:
             self.lights = msg.lights
             self.calculate_traffic_light_waypoints()
 
@@ -290,7 +289,7 @@ class TLDetector(object):
 
         """
 
-        if self.simulated_detection is True:
+        if self.simulated_detection > 0:
             if self.lights is None or light >= len(self.lights):
                 rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
                 return TrafficLight.UNKNOWN
