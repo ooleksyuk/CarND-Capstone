@@ -21,7 +21,7 @@ from keras import backend
 STATE_COUNT_THRESHOLD = 3
 TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250  # 250m
 SMOOTH = 1.
-LABELS = list(enumerate(['Red', 'Yellow', 'Green', 'None']))
+LABELS = list(enumerate(['Red', 'Yellow', 'Green', 'None', 'None']))
 
 
 def dice_coef(y_true, y_pred):
