@@ -227,6 +227,9 @@ class TLDetector(object):
         return wp_min
 
     def extract_image(self, pred_image_mask, image):
+        rospy.loginfo("[TL_DETECTOR] Detecting TL...extract_image()")
+        rospy.loginfo(pred_image_mask)
+        # print pred_image_mask
         if np.max(pred_image_mask) < self.projection_min:
             return None
 
@@ -262,6 +265,7 @@ class TLDetector(object):
                      int(left * self.resize_width_ratio):int(right * self.resize_width_ratio)]
 
     def detect_traffic_light(self, cv_image):
+        rospy.loginfo("[TL_DETECTOR] Detecting TL...detect_traffic_light()")
         resize_image = cv2.resize(cv_image, (self.resize_width, self.resize_height))
         resize_image = cv2.cvtColor(resize_image, cv2.COLOR_RGB2GRAY)
         resize_image = resize_image[..., np.newaxis]
@@ -346,7 +350,6 @@ class TLDetector(object):
         """
         dist2 = (pose1.position.x-pose2.position.x)**2 + (pose1.position.y-pose2.position.y)**2
         return dist2
-
 
     def transform_to_car_frame(self, pose_stamped):
         """Transform the given pose to car co-ordinate frame
