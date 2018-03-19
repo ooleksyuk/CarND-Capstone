@@ -7,7 +7,6 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifier
-from dummy_detector import DummyDetector
 import tf
 import cv2
 import yaml
@@ -217,7 +216,6 @@ class TLDetector(object):
 
         return self.stoplines_wp[light], self.get_light_state(light)
 
-
     def distance2(self, pose1, pose2):
         """Calculate the square of the Eucleadian distance bentween the two poses given
 
@@ -342,14 +340,8 @@ class TLDetector(object):
 
         return light_min
 
-
-detector = 'dummy'
-
 if __name__ == '__main__':
     try:
-        if detector == 'dummy':
-            DummyDetector()
-        else:
-            TLDetector()
+        TLDetector()
     except rospy.ROSInterruptException:
         rospy.logerr('Could not start traffic node.')
