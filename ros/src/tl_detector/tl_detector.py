@@ -87,6 +87,7 @@ class TLDetector(object):
         self.detector_model = model_from_json(loaded_model_json)
         # load weights into new model
         self.detector_model.load_weights(self.config['tl']['tl_detection_model'])
+        self.detector_model._make_predict_function()
         rospy.loginfo("[TL_DETECTOR] Loaded models from disk")
 
         # self.detector_model._make_predict_function()
