@@ -21,7 +21,6 @@ from keras import backend
 STATE_COUNT_THRESHOLD = 3
 TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250  # 250m
 SMOOTH = 1.
-LABELS = list(enumerate(['Red', 'Yellow', 'Green', 'None', 'None']))
 
 
 def dice_coef(y_true, y_pred):
@@ -76,16 +75,15 @@ class TLDetector(object):
         # Detector setup
         rospy.loginfo("[TL_DETECTOR] Loading TLDetector model")
         custom_objects = {'dice_coef_loss': dice_coef_loss, 'dice_coef': dice_coef}
-        # self.detector_model = load_model(self.config['tl']['tl_detection_model'],
-        #                                  custom_objects=custom_objects)
+        # self.detector_model = load_model(self.config['tl']['tl_detection_model'], custom_objects=custom_objects)
         # load json and create model
-        get_custom_objects().update(custom_objects)
         json_file = open(self.config['tl']['tl_detector_model_json'], 'r')
         loaded_model_json = json_file.read()
         json_file.close()
         self.detector_model = model_from_json(loaded_model_json)
         # load weights into new model
         self.detector_model.load_weights(self.config['tl']['tl_detection_model'])
+        get_custom_objects().update(custom_objects)
         self.detector_model._make_predict_function()
         rospy.loginfo("[TL_DETECTOR] Loaded models from disk")
 
@@ -288,17 +286,18 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-
+        labels = list(enumerate(['Red', 'Yellow', 'Green', 'None', 'None']))
         if self.simulated_detection > 0:
             if self.lights is None or light >= len(self.lights):
-                rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+                rospy.loginfo("[TL_DETECTOR] simulated_detection: No TL is detected. None")
                 return TrafficLight.UNKNOWN
             state = self.lights[light].state
+            rospy.loginfo("[TL_DETECTOR] simulated_detection: Nearest TL-state is: %s", labels[state][1])
             return state
 
         if not self.has_image:
             self.prev_light_loc = None
-            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+            rospy.loginfo("[TL_DETECTOR] has_image is None: No TL is detected. None")
             return TrafficLight.UNKNOWN
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, self.color_mode)
@@ -306,9 +305,10 @@ class TLDetector(object):
         if tl_image is not None:
             state = self.light_classifier.get_classification(tl_image)
             state = state if (state != self.invalid_class_number) else TrafficLight.UNKNOWN
+            rospy.loginfo("[TL_DETECTOR] Nearest TL-state is: %s", labels[state][1])
             return state
         else:
-            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
+            rospy.loginfo("[TL_DETECTOR] tl_image is None: No TL is detected. None")
             return TrafficLight.UNKNOWN
 
     def process_traffic_lights(self):
@@ -330,8 +330,8 @@ class TLDetector(object):
         if light is None:
             rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
             return -1, TrafficLight.UNKNOWN
+
         state = self.get_light_state(light)
-        rospy.loginfo("[TL_DETECTOR] Nearest TL-state is: %s", LABELS[state][1])
 
         return self.stoplines_wp[light], state
 
