@@ -18,7 +18,7 @@ from keras.models import load_model, model_from_json
 from keras.utils.generic_utils import get_custom_objects
 from keras import backend
 
-STATE_COUNT_THRESHOLD = 3
+STATE_COUNT_THRESHOLD = 2
 TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250  # 250m
 SMOOTH = 1.
 
@@ -110,7 +110,7 @@ class TLDetector(object):
         rely on the position of the light and the camera image to predict it.
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
-        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
+        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb, queue_size=1)
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
