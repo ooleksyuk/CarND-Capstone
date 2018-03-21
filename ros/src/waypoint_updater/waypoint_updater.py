@@ -29,7 +29,8 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-MIN_ACCELERATION = -0.5
+MIN_ACCELERATION = -0.6
+SAFE_DIST = 1.
 
 
 class WaypointUpdater(object):
@@ -212,6 +213,8 @@ class WaypointUpdater(object):
             # s = distance between next waypoint and traffic light waypoint 
             # then, u = sqrt(-2 * a * s)
             stopping_distance = self.distance(self.waypoints_stamped.waypoints, next_waypoint, self.red_light_waypoint)
+            if stopping_distance > SAFE_DIST:
+                stopping_distance -= SAFE_DIST
             trajectory_target_speed = min(self.current_speed, min(max_speed, math.sqrt(-2.0 * MIN_ACCELERATION * stopping_distance)))
         else:
             trajectory_target_speed = max_speed
