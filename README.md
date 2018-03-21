@@ -19,7 +19,7 @@ This is the Capstone project for the Udacity Self-Driving Car Nanodegree. We dev
 * Launches correctly using the launch files provided in the capstone repo. 
 
 [![Visual Car On the Track Video](youtube-car-go.png)](https://youtu.be/ol_FAZobGF0)
-_(click on the image to play video)_
+_(click on the image to play video) Credits: **Jaeil Park**_
 
 ### What we have implemented? 
 
