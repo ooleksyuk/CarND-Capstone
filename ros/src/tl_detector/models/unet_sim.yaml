@@ -1,4 +1,5 @@
 tl:
+  model_id: 0
   tl_classification_model: 'models/tl_weights_classifier_sim.h5'
   tl_detection_model: 'models/tl_weights_detector_sim.h5'
   tl_detector_model_json: 'models/tl_model_detector_sim.json'

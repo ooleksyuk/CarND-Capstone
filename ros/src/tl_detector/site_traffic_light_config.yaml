@@ -4,17 +4,4 @@ camera_info:
   image_width: 800
   image_height: 600
 stop_line_positions:
-    - [8.0, 16.2]
-tl:
-  tl_classification_model: 'models/tl_weights_classifier_carla.h5'
-  tl_detection_model: 'models/tl_weights_detector_carla.h5'
-  tl_detector_model_json: 'models/tl_model_detector_carla.json'
-  classifier_resize_height: 64
-  classifier_resize_width: 32
-  detector_resize_width: 128
-  detector_resize_height: 96
-  projection_threshold: 2
-  projection_min: 200
-  detector_rate: 20
-  is_carla: true
-  color_mode: 'rgb8'
+    - [8.0, 16.2]'

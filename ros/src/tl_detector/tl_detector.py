@@ -7,6 +7,8 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifier
+from light_classification.tl_classifier_unet import UnetClassifier
+from light_classification.tl_classifier_ion import IonClassifier
 import tf
 import cv2
 import yaml
@@ -16,6 +18,19 @@ import sys
 STATE_COUNT_THRESHOLD = 2
 TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250  # 250m
 
+unet_carla_model_config = "tl:\n\
+  tl_classification_model: 'models/tl_weights_classifier_carla.h5'\n\
+  tl_detection_model: 'models/tl_weights_detector_carla.h5'\n\
+  tl_detector_model_json: 'models/tl_model_detector_carla.json'\n\
+  classifier_resize_height: 64\n\
+  classifier_resize_width: 32\n\
+  detector_resize_width: 128\n\
+  detector_resize_height: 96\n\
+  projection_threshold: 2\n\
+  projection_min: 200\n\
+  detector_rate: 20\n\
+  is_carla: true\n\
+  color_mode: 'rgb8'"
 
 class TLDetector(object):
     def __init__(self):
@@ -23,9 +38,7 @@ class TLDetector(object):
 
         self.pose_stamped = None
         self.waypoints_stamped = None
-        self.camera_image = None
         self.lights = None
-        self.has_image = False
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -43,13 +56,13 @@ class TLDetector(object):
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
 
-        config_string = rospy.get_param('~model_config')
+        config_string = rospy.get_param('~model_config', unet_carla_model_config)
         model_config = yaml.load(config_string)
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier(model_config, self.config)
+        self.light_classifier = self.get_classifier(model_config, self.config)
         self.tf_listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -62,10 +75,19 @@ class TLDetector(object):
 
         self.camera_callback_count = 0
 
-        self.simulated_detection = rospy.get_param('~simulated_detection', 0)
         self.tl_detection_interval_frames = rospy.get_param('~tl_detection_interval_frames', 1)
 
         rospy.spin()
+
+    def get_classifier(self, model_config, input_config):
+        model_id =  model_config['tl']['model_id']
+
+        if model_id == 0:
+            return UnetClassifier(model_config, self.config)
+        elif model_id == 1:
+            return IonClassifier(model_config, self.config)
+        else:
+            return None
 
     def pose_cb(self, msg):
         self.pose_stamped = msg
@@ -82,18 +104,16 @@ class TLDetector(object):
         self.calculate_traffic_light_waypoints()
 
     def traffic_cb(self, msg):
-        if self.simulated_detection > 0:
-            self.lights = msg.lights
-            self.calculate_traffic_light_waypoints()
-
+        if self.light_classifier.input_source == TLClassifier.INPUT_SOURCE_SIM:
+            self.light_classifier.feed_trafficlights(msg.lights)
             light_wp, state = self.process_traffic_lights()
             self.publish_upcoming_red_light(light_wp, state)
-        else:
-            if self.lights is not None:
-                return
 
-            self.lights = msg.lights
-            self.calculate_traffic_light_waypoints()
+        if self.lights is not None:
+            return
+
+        self.lights = msg.lights
+        self.calculate_traffic_light_waypoints()
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -108,20 +128,17 @@ class TLDetector(object):
 
         if self.camera_callback_count < self.tl_detection_interval_frames:
             return
-        
+
         self.camera_callback_count = 0
-
-        self.has_image = True
-        self.camera_image = msg
-
-        self.light_classifier.feed_image(self.camera_image)
-        
-        light_wp, state = self.process_traffic_lights()
 
         '''
         Publish upcoming red lights at camera frequency.
         '''
-        self.publish_upcoming_red_light(light_wp, state)
+
+        if self.light_classifier.input_source == TLClassifier.INPUT_SOURCE_IMAGE:
+            self.light_classifier.feed_image(msg)
+            light_wp, state = self.process_traffic_lights()
+            self.publish_upcoming_red_light(light_wp, state)
 
     def publish_upcoming_red_light(self, light_wp, state):
         """Publishes the index of the waypoint closest to the red light's 
@@ -186,17 +203,8 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        
-        if self.simulated_detection > 0:
-            if self.lights is None or light >= len(self.lights):
-                rospy.loginfo("[TL_DETECTOR] simulated_detection: No TL is detected. None")
-                return TrafficLight.UNKNOWN
-            state = self.lights[light].state
-            rospy.loginfo("[TL_DETECTOR] simulated_detection: Nearest TL-state is: %s", labels[state][1])
-            return state
-
         #Get classification
-        return self.light_classifier.get_classification(None)
+        return self.light_classifier.get_classification(light)
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
