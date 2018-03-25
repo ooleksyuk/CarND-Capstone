@@ -12,10 +12,10 @@ import cv2
 import yaml
 import math
 import sys
-import tf
 
-STATE_COUNT_THRESHOLD = 3
-TRAFFIC_LIGHT_VISIBLE_DISTANCE = 100 # 100m
+STATE_COUNT_THRESHOLD = 2
+TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250  # 250m
+
 
 class TLDetector(object):
     def __init__(self):
@@ -38,15 +38,18 @@ class TLDetector(object):
         rely on the position of the light and the camera image to predict it.
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
-        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
+        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb, queue_size=1)
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
 
+        config_string = rospy.get_param('~model_config')
+        model_config = yaml.load(config_string)
+
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
+        self.light_classifier = TLClassifier(model_config, self.config)
         self.tf_listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -68,7 +71,7 @@ class TLDetector(object):
         self.pose_stamped = msg
 
     def waypoints_cb(self, msg):
-        if self.waypoints_stamped != None:
+        if self.waypoints_stamped is not None:
             return
 
         self.waypoints_stamped = msg
@@ -86,7 +89,7 @@ class TLDetector(object):
             light_wp, state = self.process_traffic_lights()
             self.publish_upcoming_red_light(light_wp, state)
         else:
-            if self.lights != None:
+            if self.lights is not None:
                 return
 
             self.lights = msg.lights
@@ -110,6 +113,9 @@ class TLDetector(object):
 
         self.has_image = True
         self.camera_image = msg
+
+        self.light_classifier.feed_image(self.camera_image)
+        
         light_wp, state = self.process_traffic_lights()
 
         '''
@@ -155,7 +161,7 @@ class TLDetector(object):
 
         """
         #TODO This function is currently O(n). It can be improved to O(log n)
-        if self.waypoints_stamped == None:
+        if self.waypoints_stamped is None:
             return None
 
         dist_min = sys.maxsize
@@ -180,21 +186,17 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-
+        
         if self.simulated_detection > 0:
-            if self.lights == None or light >= len(self.lights):
+            if self.lights is None or light >= len(self.lights):
+                rospy.loginfo("[TL_DETECTOR] simulated_detection: No TL is detected. None")
                 return TrafficLight.UNKNOWN
-
-            return self.lights[light].state
-
-        if(not self.has_image):
-            self.prev_light_loc = None
-            return False
-
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+            state = self.lights[light].state
+            rospy.loginfo("[TL_DETECTOR] simulated_detection: Nearest TL-state is: %s", labels[state][1])
+            return state
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        return self.light_classifier.get_classification(None)
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -205,13 +207,15 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        if self.pose_stamped == None or len(self.stoplines_wp) == 0:
+        if self.pose_stamped is None or len(self.stoplines_wp) == 0:
+            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
             return -1, TrafficLight.UNKNOWN
 
         # find the closest visible traffic light (if one exists)
         light = self.get_closest_visible_traffic_light(self.pose_stamped.pose)
 
-        if light == None:
+        if light is None:
+            rospy.loginfo("[TL_DETECTOR] No TL is detected. None")
             return -1, TrafficLight.UNKNOWN
 
         return self.stoplines_wp[light], self.get_light_state(light)
@@ -291,7 +295,7 @@ class TLDetector(object):
             self.stoplines_wp contains the waypoints of stoplines corrsponding to trafic lights in self.lights
 
         """
-        if self.waypoints_stamped != None and self.lights != None and len(self.lights_wp) == 0:
+        if self.waypoints_stamped is not None and self.lights is not None and len(self.lights_wp) == 0:
             for i in range(len(self.lights)):
                 stopline = self.get_closest_stopline_pose(self.lights[i].pose.pose)
                 self.stoplines_wp.append(self.get_closest_waypoint(stopline))
@@ -310,7 +314,7 @@ class TLDetector(object):
             int: index the closest visible traffic light (None if none exists)
 
         """
-        if self.waypoints_stamped == None or self.lights == None or len(self.lights_wp) == 0:
+        if self.waypoints_stamped is None or self.lights is None or len(self.lights_wp) == 0:
             return None
 
         num_lights = len(self.lights_wp)
@@ -327,7 +331,7 @@ class TLDetector(object):
 
         transformed_waypoint = self.transform_to_car_frame(self.waypoints_stamped.waypoints[self.lights_wp[light_min]].pose)
 
-        if transformed_waypoint != None and transformed_waypoint.pose.position.x <= 0.0:
+        if transformed_waypoint is not None and transformed_waypoint.pose.position.x <= 0.0:
             light_min += 1
 
         if light_min >= num_lights:

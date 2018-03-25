@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
 <launch>
     <node pkg="tl_detector" type="tl_detector.py" name="tl_detector" output="screen" cwd="node">
-        <param name="simulated_detection" value="1"/>
+        <param name="simulated_detection" value="0"/>
         <param name="tl_detection_interval_frames" value="2"/>
+        <param name="model_config" textfile="$(find tl_detector)/models/unet_sim.yaml" />
     </node>
 </launch>
