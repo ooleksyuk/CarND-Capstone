@@ -1,4 +1,8 @@
-## Capstone Project - Bos Robo Car Team
+## <a name="top"></a> Capstone Project Project [![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](https://www.udacity.com/course/self-driving-car-engineer-nanodegree--nd013)
+*Software to guide a real self-driving car around a test track* 
+[![Visual Car On the Track Video](youtube-car-go.png)](https://youtu.be/ol_FAZobGF0)
+_(click on the image to play video) Credits: **Jaeil Park**_
+### Capstone Project - Bos Robo Car Team
 This is the Capstone project for the Udacity Self-Driving Car Nanodegree. We developed software to guide a real self-driving car around a test track. Using the Robot Operating System (ROS), we created nodes for traffic light detection and classification, trajectory planning, and control.
 
 ### Team: **Bos Robo Car**
@@ -17,9 +21,6 @@ This is the Capstone project for the Udacity Self-Driving Car Nanodegree. We dev
 * Stops and restarts PID controllers depending on the state of /vehicle/dbw_enabled.
 * Publishes throttle, steering, and brake commands at 50hz.
 * Launches correctly using the launch files provided in the capstone repo. 
-
-[![Visual Car On the Track Video](youtube-car-go.png)](https://youtu.be/ol_FAZobGF0)
-_(click on the image to play video) Credits: **Jaeil Park**_
 
 ### What we have implemented? 
 
