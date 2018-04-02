@@ -1,0 +1,11 @@
+tl:
+  model_id: 2
+  tl_classification_graph: 'models/mobilenet_graph.pb'
+  tl_classification_labels: 'models/mobilenet_labels.txt'
+  classifier_resize_height: 128
+  classifier_resize_width: 128
+  classifier_input_mean: 128
+  classifier_input_std: 128
+  input_operation: 'input'
+  output_operation: 'final_result'
+  color_mode: 'rgb8'
