@@ -13,6 +13,8 @@ from keras import backend
 from cv_bridge import CvBridge
 import cv2
 
+import timeit
+
 from tl_classifier import TLClassifier
 
 SMOOTH = 1.
@@ -87,12 +89,14 @@ class UnetClassifier(TLClassifier):
             rospy.loginfo("[TL_DETECTOR UNET] has_image is None: No TL is detected. None")
             return TrafficLight.UNKNOWN
 
+        delta_time = timeit.default_timer()
         cv_image = self.bridge.imgmsg_to_cv2(self.image, self.color_mode)
         tl_image = self.detect_traffic_light(cv_image)
         if tl_image is not None:
             state = self.get_color_classification(tl_image)
             state = state if (state != self.invalid_class_number) else TrafficLight.UNKNOWN
-            rospy.loginfo("[TL_DETECTOR UNET] Nearest TL-state is: %s", TLClassifier.LABELS[state][1])
+            delta_time = timeit.default_timer() - delta_time
+            rospy.loginfo("[TL_DETECTOR UNET] Nearest TL-state is: %s dt %f", TLClassifier.LABELS[state][1], delta_time)
             return state
         else:
             rospy.loginfo("[TL_DETECTOR UNET] tl_image is None: No TL is detected. None")
