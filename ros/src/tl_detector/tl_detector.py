@@ -21,6 +21,7 @@ STATE_COUNT_THRESHOLD = 2
 TRAFFIC_LIGHT_VISIBLE_DISTANCE = 100  # 100m
 
 unet_carla_model_config = "tl:\n\
+  model_id: 0\n\
   tl_classification_model: 'models/tl_weights_classifier_carla.h5'\n\
   tl_detection_model: 'models/tl_weights_detector_carla.h5'\n\
   tl_detector_model_json: 'models/tl_model_detector_carla.json'\n\
