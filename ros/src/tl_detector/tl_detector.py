@@ -18,7 +18,7 @@ import math
 import sys
 
 STATE_COUNT_THRESHOLD = 2
-TRAFFIC_LIGHT_VISIBLE_DISTANCE = 250  # 250m
+TRAFFIC_LIGHT_VISIBLE_DISTANCE = 100  # 100m
 
 unet_carla_model_config = "tl:\n\
   tl_classification_model: 'models/tl_weights_classifier_carla.h5'\n\
