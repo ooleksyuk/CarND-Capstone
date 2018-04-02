@@ -10,6 +10,7 @@ from light_classification.tl_classifier import TLClassifier
 from light_classification.tl_classifier_unet import UnetClassifier
 from light_classification.tl_classifier_ion import IonClassifier
 from light_classification.tl_classifier_mobilenet import MobilenetClassifier
+from light_classification.tl_classifier_unet_tensorflow import UnetTensorflowClassifier
 import tf
 import cv2
 import yaml
@@ -89,6 +90,8 @@ class TLDetector(object):
             return IonClassifier(model_config, self.config)
         elif model_id == 2:
             return MobilenetClassifier(model_config, self.config)
+        elif model_id == 3:
+            return UnetTensorflowClassifier(model_config, self.config)
         else:
             return None
 

@@ -1,0 +1,17 @@
+tl:
+  model_id: 3
+  tl_classification_graph: 'models/optimized_tl_classifier_graph.pb'
+  classification_input_operation: 'conv2d_1_input'
+  classification_output_operation: 'dense_2/Softmax'
+  classifier_resize_height: 64
+  classifier_resize_width: 32
+  tl_detection_graph: 'models/optimized_unet_graph.pb'
+  detection_input_operation: 'input_1'
+  detection_output_operation: 'conv2d_2/Sigmoid'
+  detector_resize_width: 128
+  detector_resize_height: 96
+  projection_threshold: 2
+  projection_min: 200
+  detector_rate: 6
+  is_carla: false
+  color_mode: 'rgb8'
