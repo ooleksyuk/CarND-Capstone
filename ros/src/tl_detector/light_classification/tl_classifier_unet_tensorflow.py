@@ -58,7 +58,7 @@ class UnetTensorflowClassifier(TLClassifier):
 
     def get_classification(self, light):
         if not self.has_image:
-            rospy.loginfo("[TL_DETECTOR UNET] has_image is None: No TL is detected. None")
+            rospy.loginfo("[TL_DETECTOR UNET TENSORFLOW] has_image is None: No TL is detected. None")
             return TrafficLight.UNKNOWN
 
         delta_time = timeit.default_timer()
@@ -68,10 +68,10 @@ class UnetTensorflowClassifier(TLClassifier):
             state = self.get_color_classification(tl_image)
             state = state if (state != self.invalid_class_number) else TrafficLight.UNKNOWN
             delta_time = timeit.default_timer() - delta_time
-            rospy.loginfo("[TL_DETECTOR UNET] Nearest TL-state is: %s dt %f", TLClassifier.LABELS[state][1], delta_time)
+            rospy.loginfo("[TL_DETECTOR UNET TENSORFLOW] Nearest TL-state is: %s dt %f", TLClassifier.LABELS[state][1], delta_time)
             return state
         else:
-            rospy.loginfo("[TL_DETECTOR UNET] tl_image is None: No TL is detected. None")
+            rospy.loginfo("[TL_DETECTOR UNET TENSORFLOW] tl_image is None: No TL is detected. None")
             return TrafficLight.UNKNOWN
 
     def get_color_classification(self, image):
